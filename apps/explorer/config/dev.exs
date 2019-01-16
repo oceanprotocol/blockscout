@@ -20,7 +20,7 @@ config :logger, :reading_token_functions,
 
 import_config "dev.secret.exs"
 
-variant =
+variant = "parity"
   if is_nil(System.get_env("ETHEREUM_JSONRPC_VARIANT")) do
     "ganache"
   else
