@@ -12,6 +12,8 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
   alias Explorer.Chain.{Address, Block, Hash, Import, InternalTransaction, Transaction}
   alias Explorer.Chain.Block.Reward
   alias Explorer.Chain.Import.Runner
+  alias Explorer.Chain.Import.Runner.Address.CurrentTokenBalances
+  alias Explorer.Chain.Import.Runner.Tokens
 
   @behaviour Runner
 
@@ -44,6 +46,7 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
       |> Map.put(:timestamps, timestamps)
 
     ordered_consensus_block_numbers = ordered_consensus_block_numbers(changes_list)
+    where_invalid_neighbour = where_invalid_neighbour(changes_list)
     where_forked = where_forked(changes_list)
 
     multi
@@ -64,8 +67,11 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
         where_forked: where_forked
       })
     end)
-    |> Multi.run(:lose_consenus, fn repo, _ ->
+    |> Multi.run(:lose_consensus, fn repo, _ ->
       lose_consensus(repo, ordered_consensus_block_numbers, insert_options)
+    end)
+    |> Multi.run(:lose_invalid_neighbour_consensus, fn repo, _ ->
+      lose_invalid_neighbour_consensus(repo, where_invalid_neighbour, insert_options)
     end)
     |> Multi.run(:delete_address_token_balances, fn repo, _ ->
       delete_address_token_balances(repo, ordered_consensus_block_numbers, insert_options)
@@ -79,6 +85,14 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
                                                                 deleted_address_current_token_balances
                                                             } ->
       derive_address_current_token_balances(repo, deleted_address_current_token_balances, insert_options)
+    end)
+    |> Multi.run(:blocks_update_token_holder_counts, fn repo,
+                                                        %{
+                                                          delete_address_current_token_balances: deleted,
+                                                          derive_address_current_token_balances: inserted
+                                                        } ->
+      deltas = CurrentTokenBalances.token_holder_count_deltas(%{deleted: deleted, inserted: inserted})
+      Tokens.update_holder_counts_with_deltas(repo, deltas, insert_options)
     end)
     |> Multi.run(:delete_rewards, fn repo, _ ->
       delete_rewards(repo, changes_list, insert_options)
@@ -239,6 +253,7 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
           difficulty: fragment("EXCLUDED.difficulty"),
           gas_limit: fragment("EXCLUDED.gas_limit"),
           gas_used: fragment("EXCLUDED.gas_used"),
+          internal_transactions_indexed_at: fragment("EXCLUDED.internal_transactions_indexed_at"),
           miner_hash: fragment("EXCLUDED.miner_hash"),
           nonce: fragment("EXCLUDED.nonce"),
           number: fragment("EXCLUDED.number"),
@@ -257,7 +272,8 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
           fragment("EXCLUDED.miner_hash <> ?", block.miner_hash) or fragment("EXCLUDED.nonce <> ?", block.nonce) or
           fragment("EXCLUDED.number <> ?", block.number) or fragment("EXCLUDED.parent_hash <> ?", block.parent_hash) or
           fragment("EXCLUDED.size <> ?", block.size) or fragment("EXCLUDED.timestamp <> ?", block.timestamp) or
-          fragment("EXCLUDED.total_difficulty <> ?", block.total_difficulty)
+          fragment("EXCLUDED.total_difficulty <> ?", block.total_difficulty) or
+          fragment("EXCLUDED.internal_transactions_indexed_at <> ?", block.internal_transactions_indexed_at)
     )
   end
 
@@ -297,6 +313,32 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
     rescue
       postgrex_error in Postgrex.Error ->
         {:error, %{exception: postgrex_error, consensus_block_numbers: ordered_consensus_block_number}}
+    end
+  end
+
+  defp lose_invalid_neighbour_consensus(repo, where_invalid_neighbour, %{
+         timeout: timeout,
+         timestamps: %{updated_at: updated_at}
+       }) do
+    query =
+      from(
+        block in where_invalid_neighbour,
+        update: [
+          set: [
+            consensus: false,
+            updated_at: ^updated_at
+          ]
+        ],
+        select: [:hash, :number]
+      )
+
+    try do
+      {_, result} = repo.update_all(query, [], timeout: timeout)
+
+      {:ok, result}
+    rescue
+      postgrex_error in Postgrex.Error ->
+        {:error, %{exception: postgrex_error, where_invalid_neighbour: where_invalid_neighbour}}
     end
   end
 
@@ -356,7 +398,15 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
 
     query =
       from(address_current_token_balance in Address.CurrentTokenBalance,
-        select: map(address_current_token_balance, [:address_hash, :token_contract_address_hash]),
+        select:
+          map(address_current_token_balance, [
+            :address_hash,
+            :token_contract_address_hash,
+            # Used to determine if `address_hash` was a holder of `token_contract_address_hash` before
+
+            # `address_current_token_balance` is deleted in `update_tokens_holder_count`.
+            :value
+          ]),
         inner_join: ordered_address_current_token_balance in subquery(ordered_query),
         on:
           ordered_address_current_token_balance.address_hash == address_current_token_balance.address_hash and
@@ -431,24 +481,31 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
     insert_sql = """
     INSERT INTO address_current_token_balances (address_hash, token_contract_address_hash, block_number, value, inserted_at, updated_at)
     #{select_sql}
-    RETURNING address_hash, token_contract_address_hash, block_number
+    RETURNING address_hash, token_contract_address_hash, block_number, value
     """
 
     with {:ok,
           %Postgrex.Result{
-            columns: ["address_hash", "token_contract_address_hash", "block_number"],
+            columns: [
+              "address_hash",
+              "token_contract_address_hash",
+              "block_number",
+              # needed for `update_tokens_holder_count`
+              "value"
+            ],
             command: :insert,
             rows: rows
           }} <- SQL.query(repo, insert_sql, parameters, timeout: timeout) do
       derived_address_current_token_balances =
-        Enum.map(rows, fn [address_hash_bytes, token_contract_address_hash_bytes, block_number] ->
+        Enum.map(rows, fn [address_hash_bytes, token_contract_address_hash_bytes, block_number, value] ->
           {:ok, address_hash} = Hash.Address.load(address_hash_bytes)
           {:ok, token_contract_address_hash} = Hash.Address.load(token_contract_address_hash_bytes)
 
           %{
             address_hash: address_hash,
             token_contract_address_hash: token_contract_address_hash,
-            block_number: block_number
+            block_number: block_number,
+            value: value
           }
         end)
 
@@ -516,12 +573,32 @@ defmodule Explorer.Chain.Import.Runner.Blocks do
     initial = from(t in Transaction, where: false)
 
     Enum.reduce(blocks_changes, initial, fn %{consensus: consensus, hash: hash, number: number}, acc ->
-      case consensus do
-        false ->
-          from(transaction in acc, or_where: transaction.block_hash == ^hash and transaction.block_number == ^number)
+      if consensus do
+        from(transaction in acc, or_where: transaction.block_hash != ^hash and transaction.block_number == ^number)
+      else
+        from(transaction in acc, or_where: transaction.block_hash == ^hash and transaction.block_number == ^number)
+      end
+    end)
+  end
 
-        true ->
-          from(transaction in acc, or_where: transaction.block_hash != ^hash and transaction.block_number == ^number)
+  defp where_invalid_neighbour(blocks_changes) when is_list(blocks_changes) do
+    initial = from(b in Block, where: false)
+
+    Enum.reduce(blocks_changes, initial, fn %{
+                                              consensus: consensus,
+                                              hash: hash,
+                                              parent_hash: parent_hash,
+                                              number: number
+                                            },
+                                            acc ->
+      if consensus do
+        from(
+          block in acc,
+          or_where: block.number == ^(number - 1) and block.hash != ^parent_hash,
+          or_where: block.number == ^(number + 1) and block.parent_hash != ^hash
+        )
+      else
+        acc
       end
     end)
   end

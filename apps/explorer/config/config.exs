@@ -13,7 +13,21 @@ config :explorer,
 
 config :explorer, Explorer.Counters.AverageBlockTime, enabled: true
 
-config :explorer, Explorer.Counters.AddressesWithBalanceCounter, enabled: true, enable_consolidation: true
+config :explorer, Explorer.ExchangeRates.Source.CoinMarketCap,
+  pages: String.to_integer(System.get_env("COINMARKETCAP_PAGES") || "10")
+
+balances_update_interval =
+  if System.get_env("ADDRESS_WITH_BALANCES_UPDATE_INTERVAL") do
+    case Integer.parse(System.get_env("ADDRESS_WITH_BALANCES_UPDATE_INTERVAL")) do
+      {integer, ""} -> integer
+      _ -> nil
+    end
+  end
+
+config :explorer, Explorer.Counters.AddressesWithBalanceCounter,
+  enabled: true,
+  enable_consolidation: true,
+  update_interval_in_seconds: balances_update_interval || 30 * 60
 
 config :explorer, Explorer.ExchangeRates, enabled: true, store: :ets
 
@@ -40,8 +54,8 @@ else
   config :explorer, Explorer.Validator.MetadataProcessor, enabled: false
 end
 
-if System.get_env("SUPPLY_MODULE") == "TransactionAndLog" do
-  config :explorer, supply: Explorer.Chain.Supply.TransactionAndLog
+if System.get_env("SUPPLY_MODULE") == "TokenBridge" do
+  config :explorer, supply: Explorer.Chain.Supply.TokenBridge
 end
 
 if System.get_env("SOURCE_MODULE") == "TransactionAndLog" do

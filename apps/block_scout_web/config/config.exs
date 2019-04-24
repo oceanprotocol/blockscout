@@ -8,7 +8,10 @@ use Mix.Config
 # General application configuration
 config :block_scout_web,
   namespace: BlockScoutWeb,
-  ecto_repos: [Explorer.Repo]
+  ecto_repos: [Explorer.Repo],
+  version: System.get_env("BLOCKSCOUT_VERSION"),
+  release_link: System.get_env("RELEASE_LINK"),
+  decompiled_smart_contract_token: System.get_env("DECOMPILED_SMART_CONTRACT_TOKEN")
 
 config :block_scout_web, BlockScoutWeb.Chain,
   network: System.get_env("NETWORK"),
@@ -16,6 +19,71 @@ config :block_scout_web, BlockScoutWeb.Chain,
   network_icon: System.get_env("NETWORK_ICON"),
   logo: System.get_env("LOGO"),
   has_emission_funds: false
+
+config :block_scout_web,
+  link_to_other_explorers: System.get_env("LINK_TO_OTHER_EXPLORERS") == "true",
+  other_explorers: %{
+    "Etherscan" => "https://etherscan.io/",
+    "EtherChain" => "https://www.etherchain.org/",
+    "Bloxy" => "https://bloxy.info/"
+  },
+  other_networks: [
+    %{
+      title: "POA Core",
+      url: "https://blockscout.com/poa/core"
+    },
+    %{
+      title: "POA Sokol",
+      url: "https://blockscout.com/poa/sokol",
+      test_net?: true
+    },
+    %{
+      title: "xDai Chain",
+      url: "https://blockscout.com/poa/dai"
+    },
+    %{
+      title: "Ethereum Mainnet",
+      url: "https://blockscout.com/eth/mainnet"
+    },
+    %{
+      title: "Kovan Testnet",
+      url: "https://blockscout.com/eth/kovan",
+      test_net?: true
+    },
+    %{
+      title: "Ropsten Testnet",
+      url: "https://blockscout.com/eth/ropsten",
+      test_net?: true
+    },
+    %{
+      title: "Goerli Testnet",
+      url: "https://blockscout.com/eth/goerli",
+      test_net?: true
+    },
+    %{
+      title: "Rinkeby Testnet",
+      url: "https://blockscout.com/eth/rinkeby",
+      test_net?: true
+    },
+    %{
+      title: "Ethereum Classic",
+      url: "https://blockscout.com/etc/mainnet"
+    },
+    %{
+      title: "Aerum Mainnet",
+      url: "https://blockscout.com/aerum/mainnet"
+    },
+    %{
+      title: "Callisto Mainnet",
+      url: "https://blockscout.com/callisto/mainnet"
+    },
+    %{
+      title: "RSK Mainnet",
+      url: "https://blockscout.com/rsk/mainnet"
+    }
+  ]
+
+config :block_scout_web, BlockScoutWeb.Counters.BlocksIndexedCounter, enabled: true
 
 # Configures the endpoint
 config :block_scout_web, BlockScoutWeb.Endpoint,
@@ -37,7 +105,7 @@ config :block_scout_web, BlockScoutWeb.Gettext, locales: ~w(en), default_locale:
 
 config :block_scout_web, BlockScoutWeb.SocialMedia,
   twitter: "PoaNetwork",
-  telegram: "oraclesnetwork",
+  telegram: "poa_network",
   facebook: "PoaNetwork",
   instagram: "PoaNetwork"
 
@@ -54,14 +122,22 @@ config :logger, :block_scout_web,
        block_number step count error_count shrunk import_id transaction_id)a,
   metadata_filter: [application: :block_scout_web]
 
+config :prometheus, BlockScoutWeb.Prometheus.Instrumenter,
+  # override default for Phoenix 1.4 compatibility
+  # * `:transport_name` to `:transport`
+  # * remove `:vsn`
+  channel_join_labels: [:channel, :topic, :transport],
+  # override default for Phoenix 1.4 compatibility
+  # * `:transport_name` to `:transport`
+  # * remove `:vsn`
+  channel_receive_labels: [:channel, :topic, :transport, :event]
+
 config :spandex_phoenix, tracer: BlockScoutWeb.Tracer
 
 config :wobserver,
   # return only the local node
   discovery: :none,
   mode: :plug
-
-config :block_scout_web, BlockScoutWeb.Counters.BlocksIndexedCounter, enabled: true
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
