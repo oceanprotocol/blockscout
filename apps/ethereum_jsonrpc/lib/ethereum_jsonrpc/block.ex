@@ -319,6 +319,8 @@ defmodule EthereumJSONRPC.Block do
   @spec elixir_to_transactions(elixir) :: Transactions.elixir()
   def elixir_to_transactions(%{"transactions" => transactions}), do: transactions
 
+  def elixir_to_transactions(_), do: []
+
   @doc """
   Get `t:EthereumJSONRPC.Uncles.elixir/0` from `t:elixir/0`.
 
@@ -435,8 +437,13 @@ defmodule EthereumJSONRPC.Block do
   end
 
   defp entry_to_elixir({key, quantity})
-       when key in ~w(difficulty gasLimit gasUsed minimumGasPrice number size totalDifficulty) do
+       when key in ~w(difficulty gasLimit gasUsed minimumGasPrice number size totalDifficulty) and not is_nil(quantity) do
     {key, quantity_to_integer(quantity)}
+  end
+
+  # Size and totalDifficulty may be `nil` for uncle blocks
+  defp entry_to_elixir({key, nil}) when key in ~w(size totalDifficulty) do
+    {key, nil}
   end
 
   # double check that no new keys are being missed by requiring explicit match for passthrough

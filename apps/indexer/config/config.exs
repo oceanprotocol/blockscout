@@ -31,13 +31,15 @@ block_transformer =
 config :indexer,
   block_transformer: block_transformer,
   ecto_repos: [Explorer.Repo],
-  metadata_updater_days_interval: 2,
+  metadata_updater_seconds_interval:
+    String.to_integer(System.get_env("TOKEN_METADATA_UPDATE_INTERVAL") || "#{2 * 24 * 60 * 60}"),
   # bytes
   memory_limit: 1 <<< 30,
   first_block: System.get_env("FIRST_BLOCK") || "0"
 
 # config :indexer, Indexer.Fetcher.ReplacedTransaction.Supervisor, disabled?: true
 # config :indexer, Indexer.Fetcher.BlockReward.Supervisor, disabled?: true
+config :indexer, Indexer.Fetcher.StakingPools.Supervisor, disabled?: true
 
 config :indexer, Indexer.Tracer,
   service: :indexer,
