@@ -34,7 +34,8 @@ RUN cd apps/block_scout_web/assets/ && \
 RUN cd apps/explorer/ && \
     npm install && \
     apk del --force-broken-world alpine-sdk gmp-dev automake libtool inotify-tools autoconf python
-
+    
+RUN mix phx.digest
 # RUN mix do ecto.drop --force, ecto.create, ecto.migrate
 
 # USER default

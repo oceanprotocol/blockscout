@@ -88,6 +88,9 @@ $fa-font-path: "~@fortawesome/fontawesome-free/webfonts";
 @import "components/coin-balance-tile";
 @import "components/highlight";
 
+// Ocean Custom patchs
+@import "components/dashboard-no-graph";
+
 :export {
   primary: $primary;
   secondary: $secondary;
