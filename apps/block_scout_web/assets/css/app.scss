@@ -130,7 +130,7 @@ $fa-font-path: "~@fortawesome/fontawesome-free/webfonts";
 @import "components/btn_no_border";
 
 // Ocean Custom patchs
-@import "components/dashboard-no-graph";
+// @import "components/dashboard-no-graph";
 
 :export {
   dashboardBannerChartAxisFontColor: $dashboard-banner-chart-axis-font-color;
