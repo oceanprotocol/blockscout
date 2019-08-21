@@ -1,0 +1,46 @@
+nav.navbar.navbar-dark.navbar-expand-lg.navbar-primary {
+    background: #222;
+}
+
+.navbar.navbar-primary .navbar-nav .nav-link.active, .navbar.navbar-primary .navbar-nav .nav-link:hover, .navbar.navbar-primary .navbar-nav .nav-link.active-icon {
+    color: #a3a9b5;
+}
+
+.navbar.navbar-primary .form-control {
+    background: #444;
+    border-color: #333;
+}
+
+.navbar-brand {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.navbar-logo {
+    max-height: 30px;
+}
+
+.dashboard-banner-network-graph {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.dashboard-banner {
+    background-image: url('/images/cube.svg');
+    background-repeat: no-repeat;
+    background-position: 30px 80%;
+}
+
+.dashboard-banner-network-plain-container {
+    border-radius: 10px 10px 0 0;
+    background: linear-gradient(to right bottom, rgb(123, 17, 115) 0%, rgb(246, 56, 138) 100%);
+}
+
+.dashboard-banner-container::after {
+    display: none;
+}
+
+.footer {
+    background: linear-gradient(to bottom, rgb(0, 0, 0) 0%, rgb(123, 17, 115) 100%);
+}
+
